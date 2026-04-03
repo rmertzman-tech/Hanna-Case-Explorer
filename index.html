@@ -212,7 +212,7 @@ footer{max-width:72rem;margin:2rem auto 0;padding:1.5rem 1rem;text-align:center;
 .pred-stage-title.s2{color:#7fb5e8}
 .pred-stage-title.s3{color:#7fd8a8}
 .pred-prompt{font-size:.84rem;color:rgba(255,255,255,.72);line-height:1.6;margin-bottom:.5rem;font-style:italic}
-.pred-ta{width:100%;min-height:80px;padding:.65rem .75rem;background:rgba(255,255,255,.07);border:1px solid rgba(255,255,255,.18);border-radius:.4rem;color:#fff;font-family:'Georgia',serif;font-size:.86rem;resize:vertical;transition:.2s}
+.pred-ta{width:100%;min-height:100px;padding:.65rem .75rem;background:rgba(255,255,255,.07);border:1px solid rgba(255,255,255,.18);border-radius:.4rem;color:#fff;font-family:'Georgia',serif;font-size:.86rem;resize:vertical;transition:.2s}
 .pred-ta:focus{outline:none;border-color:rgba(201,168,76,.6);background:rgba(255,255,255,.1)}
 .pred-ta::placeholder{color:rgba(255,255,255,.3);font-style:italic}
 .pred-save{font-size:.7rem;font-family:'Courier New',monospace;color:rgba(127,216,168,.7);opacity:0;transition:opacity .3s;margin-top:.2rem;height:.95rem}
@@ -277,6 +277,7 @@ footer{max-width:72rem;margin:2rem auto 0;padding:1.5rem 1rem;text-align:center;
 
 @keyframes promptPulse{0%,100%{box-shadow:0 0 0 0 rgba(201,168,76,.6)}50%{box-shadow:0 0 0 6px rgba(201,168,76,0)}}
 .run-toggle-btn.prompt-pulse{animation:promptPulse 1.6s ease-in-out 3;border-color:#c9a84c !important;color:#c9a84c !important}
+.step-chart-wrap{background:rgba(0,0,0,.18);border-radius:.4rem;padding:.65rem .5rem .4rem;margin:.65rem 0;min-height:100px}
 </style>
 </head>
 <body>
@@ -746,6 +747,7 @@ footer{max-width:72rem;margin:2rem auto 0;padding:1.5rem 1rem;text-align:center;
         <div class="ucp-metrics" id="ucpMetrics"></div>
         <div class="ucp-bar-section" id="ucpBars"></div>
         <div class="ucp-narrative" id="ucpNarrative"></div>
+        <div class="step-chart-wrap" id="hannaStepChart"></div>
         <div id="morphicNote" style="margin-top:.75rem;font-size:.82rem;opacity:.7;font-family:'Courier New',monospace;text-align:center"></div>
       </div>
       <div id="ucpError" class="ucp-error" style="display:none"></div>
@@ -1055,6 +1057,101 @@ footer{max-width:72rem;margin:2rem auto 0;padding:1.5rem 1rem;text-align:center;
 <footer>Ethics Beyond Boundaries · Ethics Institute, Saint Petersburg College · Bishop Saad Sirop Hanna Case Study</footer>
 
 <script>
+
+// ── Step-by-step trace chart renderer ────────────────────────
+function renderStepChart(timeline, containerId, options) {
+  const el = document.getElementById(containerId);
+  if (!el || !timeline || !timeline.length) return;
+  options = options || {};
+  const W = Math.max(320, el.offsetWidth || 520);
+  const H = options.height || 200;
+  const PAD = {top:32,right:18,bottom:52,left:46};
+  const CW = W - PAD.left - PAD.right;
+  const CH = H - PAD.top - PAD.bottom;
+  const steps = timeline.length;
+  let bbStep = null;
+  for (let i=0; i<timeline.length; i++) {
+    if (timeline[i].biobond_active && (i===0||!timeline[i-1].biobond_active)){bbStep=i;break;}
+  }
+  const xPos = i => PAD.left + (steps>1?i/(steps-1):0)*CW;
+  const yPos = v => PAD.top + CH - Math.max(0,Math.min(1,v))*CH;
+  const TRACES = [
+    ['lambda_raw',         '#c9a84c', '\u03bb Raw'],
+    ['lambda_perceived',   '#14b8a6', '\u03bb Perceived'],
+    ['morphic_suppression','#e879f9', 'Morphic Supp.'],
+    ['os2_synergy_bridge', '#7fd8a8', 'OS2 Bridge'],
+  ];
+  const mkPath = key => timeline.map((s,i)=>
+    `${i===0?'M':'L'}${xPos(i).toFixed(1)},${yPos(s[key]||0).toFixed(1)}`
+  ).join(' ');
+  const title = options.title||'Step-by-Step Trace';
+  let svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${W}" height="${H}"
+    role="img" aria-label="${title}: line chart showing simulation metrics across ${steps} steps"
+    style="display:block;overflow:visible">`;
+  svg += `<title>${title}</title>`;
+  // Chart title
+  svg += `<text x="${PAD.left}" y="${PAD.top-12}" font-size="12" font-weight="600"
+    font-family="'Courier New',monospace" fill="rgba(255,255,255,.75)"
+    letter-spacing=".04em">${title}</text>`;
+  // Grid lines and Y-axis labels
+  [0,.25,.5,.75,1].forEach(v=>{
+    const y=yPos(v);
+    svg+=`<line x1="${PAD.left}" y1="${y}" x2="${PAD.left+CW}" y2="${y}"
+      stroke="rgba(255,255,255,.12)" stroke-width="1"/>`;
+    svg+=`<text x="${PAD.left-7}" y="${y+4}" text-anchor="end" font-size="11"
+      font-family="'Courier New',monospace" fill="rgba(255,255,255,.65)"
+      aria-hidden="true">${v.toFixed(2)}</text>`;
+  });
+  // X-axis step labels
+  timeline.forEach((s,i)=>{
+    const show = i===0||i===steps-1||i%Math.max(1,Math.floor(steps/4))===0;
+    if(show){
+      svg+=`<text x="${xPos(i)}" y="${PAD.top+CH+16}" text-anchor="middle" font-size="11"
+        font-family="'Courier New',monospace" fill="rgba(255,255,255,.60)"
+        aria-hidden="true">s${s.step}</text>`;
+    }
+  });
+  // X-axis label
+  svg+=`<text x="${PAD.left+CW/2}" y="${PAD.top+CH+30}" text-anchor="middle" font-size="11"
+    font-family="'Courier New',monospace" fill="rgba(255,255,255,.45)"
+    aria-hidden="true">simulation step</text>`;
+  // BioBond activation marker
+  if(bbStep!==null){
+    const bx=xPos(bbStep);
+    svg+=`<line x1="${bx}" y1="${PAD.top}" x2="${bx}" y2="${PAD.top+CH}"
+      stroke="#c9a84c" stroke-width="2" stroke-dasharray="5,3" opacity=".85"/>`;
+    svg+=`<text x="${bx+4}" y="${PAD.top+13}" font-size="11" font-weight="600"
+      font-family="'Courier New',monospace" fill="#c9a84c" opacity=".95"
+      >BioBond</text>`;
+  }
+  // Trace lines
+  TRACES.forEach(([key,color])=>{
+    svg+=`<path d="${mkPath(key)}" fill="none" stroke="${color}"
+      stroke-width="2.2" stroke-linejoin="round" stroke-linecap="round" opacity=".92"/>`;
+  });
+  // Endpoint dots
+  TRACES.forEach(([key,color])=>{
+    const v=(timeline[steps-1][key]||0);
+    svg+=`<circle cx="${xPos(steps-1)}" cy="${yPos(v)}" r="3.5"
+      fill="${color}" opacity=".95"/>`;
+  });
+  // Legend — positioned below chart with generous spacing and large text
+  const LEGEND_Y = PAD.top + CH + 44;
+  const legendItems = TRACES.length;
+  const itemW = Math.floor(CW / legendItems);
+  TRACES.forEach(([key,color,label],i)=>{
+    const lx = PAD.left + i * itemW;
+    svg+=`<line x1="${lx}" y1="${LEGEND_Y}" x2="${lx+18}" y2="${LEGEND_Y}"
+      stroke="${color}" stroke-width="3"/>`;
+    svg+=`<circle cx="${lx+9}" cy="${LEGEND_Y}" r="3.5" fill="${color}"/>`;
+    svg+=`<text x="${lx+24}" y="${LEGEND_Y+4}" font-size="12" font-weight="500"
+      font-family="'Courier New',monospace" fill="rgba(255,255,255,.88)"
+      aria-label="${label} trace indicator">${label}</text>`;
+  });
+  svg+='</svg>';
+  el.innerHTML=svg;
+}
+
 // ── PRF Loader ────────────────────────────────────────────────
 const PRF = {
   _fw:null, _tier:null, _cpfc:null,
@@ -1197,6 +1294,8 @@ function showScenario(id){
 
 
 let _currentRun='no-biobond';
+let _hannaLastTimeline=[];
+let _hannaLastBiobond=false;
 let _results={};
 
 function selectRun(mode){
@@ -1268,7 +1367,10 @@ async function rerunWithNewSeed() {
     renderRobustnessLog();
 
     // Also show this run's metrics in the main panel
-    renderUCPResult(data, biobond);
+    // Store timeline for chart rendering
+  _hannaLastTimeline = data.timeline || [];
+  _hannaLastBiobond = biobond;
+  renderUCPResult(data, biobond);
 
   } catch(e) {
     if (status) status.textContent = 'unavailable — try again';
@@ -1408,6 +1510,8 @@ async function runHannaSimulation(){
   const btn=document.getElementById('ucpRunBtn');
   btn.disabled=true;
   btn.innerHTML='<span class="ucp-spinner"></span>Running simulation…';
+  const _hChart=document.getElementById('hannaStepChart');
+  if(_hChart)_hChart.innerHTML='<div style="display:flex;align-items:center;justify-content:center;height:120px;background:rgba(255,255,255,.04);border-radius:.4rem;border:1px dashed rgba(255,255,255,.12)"><span style=\"font-family:\'Courier New\',monospace;font-size:11px;color:rgba(255,255,255,.35)\">Loading step trace…</span></div>';
   const bbp = document.getElementById('biobondExternalPrompt');
   if(bbp) bbp.style.display='none';
   document.getElementById('ucpResult').style.display='none';
@@ -1542,7 +1646,12 @@ function renderUCPResult(data,biobond){
 
   document.getElementById('ucpResult').style.display='block';
   predUnlockStage2_hanna();
-  renderSxS(); // update comparison panel after every run
+  renderSxS();
+  // Step chart — data is the first argument to renderUCPResult
+  if (typeof _hannaLastTimeline !== 'undefined' && _hannaLastTimeline.length) {
+    renderStepChart(_hannaLastTimeline, 'hannaStepChart',
+      {title: (_hannaLastBiobond ? 'Hanna + BioBond' : 'Hanna isolation') + ' — step trace'});
+  } // update comparison panel after every run
   renderHannaSSQ(_currentRun); // structural understanding questions
   // Show BioBond prompt after no-biobond run; hide after biobond run
   const bbPrompt = document.getElementById('biobondExternalPrompt');
